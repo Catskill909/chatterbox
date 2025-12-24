@@ -11,8 +11,15 @@ import {
   CardContent,
   CircularProgress,
   Alert,
-  Chip
+  Chip,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Slider,
+  IconButton
 } from '@mui/material'
+import { PlayArrow, Download, VolumeUp } from '@mui/icons-material'
 import axios from 'axios'
 
 const darkTheme = createTheme({
@@ -41,6 +48,12 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [selectedPost, setSelectedPost] = useState(null)
+  const [languages, setLanguages] = useState([])
+  const [selectedLanguage, setSelectedLanguage] = useState('en')
+  const [generating, setGenerating] = useState(false)
+  const [audioUrl, setAudioUrl] = useState(null)
+  const [exaggeration, setExaggeration] = useState(0.5)
+  const [cfgWeight, setCfgWeight] = useState(0.5)
 
   const fetchFeed = async () => {
     setLoading(true)
@@ -54,8 +67,42 @@ function App() {
     setLoading(false)
   }
 
+  const fetchLanguages = async () => {
+    try {
+      const response = await axios.get('/api/languages')
+      setLanguages(response.data.languages || [])
+    } catch (err) {
+      console.error('Failed to fetch languages:', err)
+    }
+  }
+
+  const generateAudio = async () => {
+    if (!selectedPost) return
+    
+    setGenerating(true)
+    setError('')
+    setAudioUrl(null)
+    
+    try {
+      const response = await axios.post('/api/generate', {
+        text: selectedPost.content,
+        language: selectedLanguage,
+        exaggeration: exaggeration,
+        cfg_weight: cfgWeight
+      })
+      
+      if (response.data.success) {
+        setAudioUrl(response.data.audio_url)
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to generate audio')
+    }
+    setGenerating(false)
+  }
+
   useEffect(() => {
     fetchFeed()
+    fetchLanguages()
   }, [])
 
   return (
@@ -67,7 +114,7 @@ function App() {
             Chatterbox TTS Demo
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Convert blog posts to natural-sounding audio with AI
+            Convert blog posts to natural-sounding English audio with Chatterbox Turbo
           </Typography>
         </Box>
 
@@ -171,10 +218,61 @@ function App() {
               <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.7, color: '#e0e0e0' }}>
                 {selectedPost.content}
               </Typography>
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+
+              {/* TTS Controls */}
+              <Box sx={{ mb: 3, p: 2, bgcolor: '#1e1e1e', borderRadius: 1 }}>
+                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
+                  <VolumeUp sx={{ fontSize: 18, mr: 1, verticalAlign: 'middle' }} />
+                  Voice Settings (Chatterbox Turbo - English)
+                </Typography>
+                
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" gutterBottom>
+                      Expressiveness: {exaggeration.toFixed(1)}
+                    </Typography>
+                    <Slider
+                      value={exaggeration}
+                      onChange={(e, val) => setExaggeration(val)}
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      size="small"
+                      sx={{ color: '#64748b' }}
+                    />
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                      Higher = more dramatic
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" gutterBottom>
+                      Pacing: {cfgWeight.toFixed(1)}
+                    </Typography>
+                    <Slider
+                      value={cfgWeight}
+                      onChange={(e, val) => setCfgWeight(val)}
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      size="small"
+                      sx={{ color: '#64748b' }}
+                    />
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                      Lower = slower, more deliberate
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+
+              {/* Generate Button */}
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
                 <Button 
                   variant="contained" 
                   size="large"
+                  onClick={generateAudio}
+                  disabled={generating}
+                  startIcon={generating ? <CircularProgress size={20} /> : <PlayArrow />}
                   sx={{
                     bgcolor: '#64748b',
                     '&:hover': {
@@ -182,13 +280,35 @@ function App() {
                     }
                   }}
                 >
-                  Generate Audio
+                  {generating ? 'Generating...' : 'Generate Audio'}
                 </Button>
-                <Chip 
-                  label="Chatterbox TTS integration coming next" 
-                  sx={{ bgcolor: '#1e1e1e', color: '#b0b0b0' }}
-                />
+                {audioUrl && (
+                  <Chip 
+                    label="Ready to play" 
+                    color="success"
+                    sx={{ bgcolor: '#10b981', color: 'white' }}
+                  />
+                )}
               </Box>
+
+              {/* Audio Player */}
+              {audioUrl && (
+                <Box sx={{ p: 2, bgcolor: '#1e1e1e', borderRadius: 1 }}>
+                  <audio 
+                    controls 
+                    src={audioUrl}
+                    style={{ width: '100%', marginBottom: '8px' }}
+                  />
+                  <Button
+                    size="small"
+                    startIcon={<Download />}
+                    href={`${audioUrl}?download=true`}
+                    sx={{ color: '#64748b' }}
+                  >
+                    Download Audio
+                  </Button>
+                </Box>
+              )}
             </CardContent>
           </Card>
         )}
